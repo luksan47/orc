@@ -52,6 +52,10 @@ namespace orc {
     return result;
   }
 
+  uint64_t PositionProvider::current() {
+    return *position;
+  }
+
   SeekableInputStream::~SeekableInputStream() {
     // PASS
   }
@@ -119,8 +123,9 @@ namespace orc {
     return static_cast<google::protobuf::int64>(position);
   }
 
-  void SeekableArrayInputStream::seek(PositionProvider& seekPosition) {
+  bool SeekableArrayInputStream::seek(PositionProvider& seekPosition) {
     position = seekPosition.next();
+    return true;
   }
 
   std::string SeekableArrayInputStream::getName() const {
@@ -203,13 +208,14 @@ namespace orc {
     return static_cast<int64_t>(position);
   }
 
-  void SeekableFileInputStream::seek(PositionProvider& location) {
+  bool SeekableFileInputStream::seek(PositionProvider& location) {
     position = location.next();
     if (position > length) {
       position = length;
       throw std::logic_error("seek too far");
     }
     pushBack = 0;
+    return true;
   }
 
   std::string SeekableFileInputStream::getName() const {

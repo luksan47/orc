@@ -321,7 +321,7 @@ DIAGNOSTIC_PUSH
     virtual void BackUp(int count) override;
     virtual bool Skip(int count) override;
     virtual int64_t ByteCount() const override;
-    virtual void seek(PositionProvider& position) override;
+    virtual bool seek(PositionProvider& position) override;
     virtual std::string getName() const override;
 
   private:
@@ -338,6 +338,8 @@ DIAGNOSTIC_PUSH
         inputBufferEnd = nullptr;
       } else {
         inputBufferEnd = inputBuffer + length;
+        bufferStartPos = input->ByteCount() - length;
+        inputBufferStart = inputBuffer;
       }
     }
 
@@ -384,6 +386,11 @@ DIAGNOSTIC_PUSH
     size_t outputBufferLength;
     // the size of the current chunk
     size_t remainingLength;
+
+    size_t headerPos;
+    size_t bufferStartPos;
+    const char* inputBufferStart;
+    size_t outputBufferOriginalLength;
 
     // the last buffer returned from the input
     const char *inputBuffer;
@@ -434,6 +441,10 @@ DIAGNOSTIC_PUSH
     inputBuffer = nullptr;
     inputBufferEnd = nullptr;
     bytesReturned = 0;
+    headerPos = 0;
+    bufferStartPos = 0;
+    inputBufferStart = nullptr;
+    outputBufferOriginalLength = 0;
   }
 
 DIAGNOSTIC_POP
@@ -456,6 +467,7 @@ DIAGNOSTIC_POP
       return true;
     }
     if (state == DECOMPRESS_HEADER || remainingLength == 0) {
+      headerPos = bufferStartPos  + (inputBuffer - inputBufferStart);
       readHeader();
     }
     if (state == DECOMPRESS_EOF) {
@@ -520,6 +532,7 @@ DIAGNOSTIC_POP
       *data = outputBuffer;
       outputBufferLength = 0;
       outputBuffer += *size;
+      outputBufferOriginalLength = *size;
     } else {
       throw std::logic_error("Unknown compression state in "
                              "ZlibDecompressionStream::Next");
@@ -564,7 +577,16 @@ DIAGNOSTIC_POP
     return bytesReturned;
   }
 
-  void ZlibDecompressionStream::seek(PositionProvider& position) {
+  bool ZlibDecompressionStream::seek(PositionProvider& position) {
+    size_t pos = position.current();
+    if (headerPos == pos && bufferStartPos <= headerPos + 3 && inputBufferStart) {
+      position.next();
+      size_t posInChunk = position.next();
+      outputBuffer = buffer.data() + posInChunk;
+      remainingLength = outputBufferOriginalLength - posInChunk;
+      outputBufferLength = outputBufferOriginalLength;
+      return false;
+    }
     // clear state to force seek to read from the right position
     state = DECOMPRESS_HEADER;
     outputBuffer = nullptr;
@@ -578,6 +600,7 @@ DIAGNOSTIC_POP
     if (!Skip(static_cast<int>(position.next()))) {
       throw ParseError("Bad skip in ZlibDecompressionStream::seek");
     }
+    return true;
   }
 
   std::string ZlibDecompressionStream::getName() const {
@@ -597,7 +620,7 @@ DIAGNOSTIC_POP
     virtual void BackUp(int count) override;
     virtual bool Skip(int count) override;
     virtual int64_t ByteCount() const override;
-    virtual void seek(PositionProvider& position) override;
+    virtual bool seek(PositionProvider& position) override;
     virtual std::string getName() const override = 0;
 
   protected:
@@ -801,7 +824,7 @@ DIAGNOSTIC_POP
     return bytesReturned;
   }
 
-  void BlockDecompressionStream::seek(PositionProvider& position) {
+  bool BlockDecompressionStream::seek(PositionProvider& position) {
     // clear state to force seek to read from the right position
     state = DECOMPRESS_HEADER;
     outputBufferPtr = nullptr;
@@ -814,6 +837,7 @@ DIAGNOSTIC_POP
     if (!Skip(static_cast<int>(position.next()))) {
       throw ParseError("Bad skip in " + getName());
     }
+    return true;
   }
 
   class SnappyDecompressionStream: public BlockDecompressionStream {

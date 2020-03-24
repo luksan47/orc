@@ -41,6 +41,7 @@ namespace orc {
   public:
     PositionProvider(const std::list<uint64_t>& positions);
     uint64_t next();
+    uint64_t current();
   };
 
   /**
@@ -51,7 +52,7 @@ namespace orc {
   class SeekableInputStream: public google::protobuf::io::ZeroCopyInputStream {
   public:
     virtual ~SeekableInputStream();
-    virtual void seek(PositionProvider& position) = 0;
+    virtual bool seek(PositionProvider& position) = 0;
     virtual std::string getName() const = 0;
   };
 
@@ -77,7 +78,7 @@ namespace orc {
     virtual void BackUp(int count) override;
     virtual bool Skip(int count) override;
     virtual google::protobuf::int64 ByteCount() const override;
-    virtual void seek(PositionProvider& position) override;
+    virtual bool seek(PositionProvider& position) override;
     virtual std::string getName() const override;
   };
 
@@ -107,7 +108,7 @@ namespace orc {
     virtual void BackUp(int count) override;
     virtual bool Skip(int count) override;
     virtual int64_t ByteCount() const override;
-    virtual void seek(PositionProvider& position) override;
+    virtual bool seek(PositionProvider& position) override;
     virtual std::string getName() const override;
   };
 
