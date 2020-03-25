@@ -392,7 +392,6 @@ DIAGNOSTIC_PUSH
     size_t outputBufferOriginalLength;
     const char* inputBufferStart;
     const char* headerPtr;
-    size_t originalRemainingLength;
 
     // the last buffer returned from the input
     const char *inputBuffer;
@@ -448,7 +447,6 @@ DIAGNOSTIC_PUSH
     outputBufferOriginalLength = 0;
     inputBufferStart = nullptr;
     headerPtr = nullptr;
-    originalRemainingLength = 0;
   }
 
 DIAGNOSTIC_POP
@@ -547,7 +545,6 @@ DIAGNOSTIC_POP
     bytesReturned += *size;
     if (saveBufferPos) {
       outputBufferOriginalLength = *size;
-      originalRemainingLength = remainingLength;
       headerPtr = reinterpret_cast<const char*>(*data);
     }
     return true;
@@ -592,8 +589,7 @@ DIAGNOSTIC_POP
     if (headerPos == pos + 3 && bufferStartPos <= headerPos && inputBufferStart) {
       position.next();
       size_t posInChunk = position.next();
-      remainingLength = originalRemainingLength - posInChunk; //outputBuffer - (headerPtr + posInChunk);//
-      outputBufferLength = outputBufferOriginalLength  - posInChunk; //outputBuffer - (headerPtr + posInChunk); //
+      outputBufferLength = outputBufferOriginalLength - posInChunk; //outputBuffer - (headerPtr + posInChunk); //
       outputBuffer = headerPtr + posInChunk;//buffer.data() + posInChunk;
       return false;
     }
