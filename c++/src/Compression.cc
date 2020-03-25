@@ -389,8 +389,10 @@ DIAGNOSTIC_PUSH
 
     size_t headerPos;
     size_t bufferStartPos;
-    const char* inputBufferStart;
     size_t outputBufferOriginalLength;
+    const char* inputBufferStart;
+    const char* headerPtr;
+    size_t originalRemainingLength;
 
     // the last buffer returned from the input
     const char *inputBuffer;
@@ -443,8 +445,10 @@ DIAGNOSTIC_PUSH
     bytesReturned = 0;
     headerPos = 0;
     bufferStartPos = 0;
-    inputBufferStart = nullptr;
     outputBufferOriginalLength = 0;
+    inputBufferStart = nullptr;
+    headerPtr = nullptr;
+    originalRemainingLength = 0;
   }
 
 DIAGNOSTIC_POP
@@ -458,6 +462,7 @@ DIAGNOSTIC_POP
   }
 
   bool ZlibDecompressionStream::Next(const void** data, int*size) {
+    bool saveBufferPos = false;
     // if the user pushed back, return them the partial buffer
     if (outputBufferLength) {
       *data = outputBuffer;
@@ -467,8 +472,9 @@ DIAGNOSTIC_POP
       return true;
     }
     if (state == DECOMPRESS_HEADER || remainingLength == 0) {
-      headerPos = bufferStartPos  + (inputBuffer - inputBufferStart);
       readHeader();
+      headerPos = bufferStartPos  + (inputBuffer - inputBufferStart);
+      saveBufferPos = true;
     }
     if (state == DECOMPRESS_EOF) {
       return false;
@@ -532,7 +538,6 @@ DIAGNOSTIC_POP
       *data = outputBuffer;
       outputBufferLength = 0;
       outputBuffer += *size;
-      outputBufferOriginalLength = *size;
     } else {
       throw std::logic_error("Unknown compression state in "
                              "ZlibDecompressionStream::Next");
@@ -540,6 +545,11 @@ DIAGNOSTIC_POP
     inputBuffer += availSize;
     remainingLength -= availSize;
     bytesReturned += *size;
+    if (saveBufferPos) {
+      outputBufferOriginalLength = *size;
+      originalRemainingLength = remainingLength;
+      headerPtr = reinterpret_cast<const char*>(*data);
+    }
     return true;
   }
 
@@ -579,12 +589,12 @@ DIAGNOSTIC_POP
 
   bool ZlibDecompressionStream::seek(PositionProvider& position) {
     size_t pos = position.current();
-    if (headerPos == pos && bufferStartPos <= headerPos + 3 && inputBufferStart) {
+    if (headerPos == pos + 3 && bufferStartPos <= headerPos && inputBufferStart) {
       position.next();
       size_t posInChunk = position.next();
-      outputBuffer = buffer.data() + posInChunk;
-      remainingLength = outputBufferOriginalLength - posInChunk;
-      outputBufferLength = outputBufferOriginalLength;
+      remainingLength = originalRemainingLength - posInChunk; //outputBuffer - (headerPtr + posInChunk);//
+      outputBufferLength = outputBufferOriginalLength  - posInChunk; //outputBuffer - (headerPtr + posInChunk); //
+      outputBuffer = headerPtr + posInChunk;//buffer.data() + posInChunk;
       return false;
     }
     // clear state to force seek to read from the right position
